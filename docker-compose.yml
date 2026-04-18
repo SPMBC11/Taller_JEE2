@@ -1,0 +1,120 @@
+services:
+  postgres-examenes:
+    image: postgres:16
+    container_name: postgres-examenes
+    command: ["postgres", "-c", "max_prepared_transactions=100"]
+    environment:
+      POSTGRES_DB: exam_db
+      POSTGRES_USER: exam_user
+      POSTGRES_PASSWORD: exam_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./docker/db1-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exam_user -d exam_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  postgres-notas:
+    image: postgres:16
+    container_name: postgres-notas
+    command: ["postgres", "-c", "max_prepared_transactions=100"]
+    environment:
+      POSTGRES_DB: student_db
+      POSTGRES_USER: student_user
+      POSTGRES_PASSWORD: student_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./docker/db2-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student_user -d student_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  queue:
+    image: rabbitmq:3.13-management
+    container_name: queue
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  wildfly-datos:
+    build:
+      context: ./wildfly-datos
+    container_name: wildfly-datos
+    environment:
+      EXAM_DB_HOST: postgres-examenes
+      EXAM_DB_NAME: exam_db
+      EXAM_DB_USER: exam_user
+      EXAM_DB_PASSWORD: exam_pass
+      STUDENT_DB_HOST: postgres-notas
+      STUDENT_DB_NAME: student_db
+      STUDENT_DB_USER: student_user
+      STUDENT_DB_PASSWORD: student_pass
+      TXN_NODE_ID: wildfly-datos-node
+      QUEUE_HOST: queue
+      QUEUE_PORT: 5672
+      QUEUE_USER: guest
+      QUEUE_PASSWORD: guest
+      QUEUE_EXCHANGE: exam.exchange
+      QUEUE_NAME: exam.notifications
+      QUEUE_ROUTING_KEY: exam.finished
+    depends_on:
+      postgres-examenes:
+        condition: service_healthy
+      postgres-notas:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/jboss/wildfly/bin/jboss-cli.sh --connect --command=':read-attribute(name=server-state)' | grep -q running"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+    ports:
+      - "8081:8080"
+
+  wildfly-logica:
+    build:
+      context: ./wildfly-logica
+    container_name: wildfly-logica
+    environment:
+      DATA_SERVICE_URL: http://wildfly-datos:8080/api/data/evaluations
+    depends_on:
+      wildfly-datos:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/jboss/wildfly/bin/jboss-cli.sh --connect --command=':read-attribute(name=server-state)' | grep -q running"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+    ports:
+      - "8080:8080"
+
+  email-service:
+    build:
+      context: ./email-service
+    container_name: email-service
+    environment:
+      RABBITMQ_HOST: queue
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      MAIL_MOCK_MODE: "true"
+      MAIL_FROM: no-reply@taller.local
+    depends_on:
+      queue:
+        condition: service_healthy

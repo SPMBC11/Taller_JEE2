@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: email-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: true
+        retry:
+          enabled: true
+          initial-interval: 2000
+          max-attempts: 6
+          multiplier: 2
+          max-interval: 30000
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+
+app:
+  rabbit:
+    exchange: ${RABBIT_EXCHANGE:exam.exchange}
+    queue: ${RABBIT_QUEUE:exam.notifications}
+    routing-key: ${RABBIT_ROUTING_KEY:exam.finished}
+  email:
+    from: ${MAIL_FROM:no-reply@taller.local}
+    mock-mode: ${MAIL_MOCK_MODE:true}
+
+logging:
+  level:
+    com.taller.emailservice: INFO

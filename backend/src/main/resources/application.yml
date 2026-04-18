@@ -1,0 +1,36 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: backend
+  jpa:
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+app:
+  datasource:
+    exam:
+      host: ${EXAM_DB_HOST:localhost}
+      port: ${EXAM_DB_PORT:5432}
+      database: ${EXAM_DB_NAME:exam_db}
+      username: ${EXAM_DB_USER:exam_user}
+      password: ${EXAM_DB_PASSWORD:exam_pass}
+    student:
+      host: ${STUDENT_DB_HOST:localhost}
+      port: ${STUDENT_DB_PORT:5432}
+      database: ${STUDENT_DB_NAME:student_db}
+      username: ${STUDENT_DB_USER:student_user}
+      password: ${STUDENT_DB_PASSWORD:student_pass}
+  rabbit:
+    exchange: ${RABBIT_EXCHANGE:exam.exchange}
+    queue: ${RABBIT_QUEUE:exam.notifications}
+    routing-key: ${RABBIT_ROUTING_KEY:exam.finished}
+
+logging:
+  level:
+    com.taller.backend: INFO

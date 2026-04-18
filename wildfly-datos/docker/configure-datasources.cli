@@ -1,0 +1,24 @@
+embed-server --std-out=echo --server-config=standalone.xml
+
+if (outcome != success) of /subsystem=datasources/jdbc-driver=postgresql:read-resource
+    module add --name=org.postgresql --resources=/opt/jboss/wildfly/postgresql.jar --dependencies=javax.api,javax.transaction.api
+    /subsystem=datasources/jdbc-driver=postgresql:add(driver-name=postgresql,driver-module-name=org.postgresql,driver-class-name=org.postgresql.Driver,driver-xa-datasource-class-name=org.postgresql.xa.PGXADataSource)
+end-if
+
+if (outcome != success) of /subsystem=datasources/xa-data-source=ExamDS:read-resource
+    /subsystem=datasources/xa-data-source=ExamDS:add(jndi-name=java:/jdbc/ExamDS,driver-name=postgresql,xa-datasource-class=org.postgresql.xa.PGXADataSource,user-name=${env.EXAM_DB_USER:exam_user},password=${env.EXAM_DB_PASSWORD:exam_pass},min-pool-size=2,max-pool-size=20,enabled=true,use-java-context=true,same-rm-override=false,interleaving=false,pad-xid=true,wrap-xa-resource=true)
+    /subsystem=datasources/xa-data-source=ExamDS/xa-datasource-properties=ServerName:add(value=${env.EXAM_DB_HOST:postgres-examenes})
+    /subsystem=datasources/xa-data-source=ExamDS/xa-datasource-properties=PortNumber:add(value=5432)
+    /subsystem=datasources/xa-data-source=ExamDS/xa-datasource-properties=DatabaseName:add(value=${env.EXAM_DB_NAME:exam_db})
+end-if
+
+if (outcome != success) of /subsystem=datasources/xa-data-source=StudentDS:read-resource
+    /subsystem=datasources/xa-data-source=StudentDS:add(jndi-name=java:/jdbc/StudentDS,driver-name=postgresql,xa-datasource-class=org.postgresql.xa.PGXADataSource,user-name=${env.STUDENT_DB_USER:student_user},password=${env.STUDENT_DB_PASSWORD:student_pass},min-pool-size=2,max-pool-size=20,enabled=true,use-java-context=true,same-rm-override=false,interleaving=false,pad-xid=true,wrap-xa-resource=true)
+    /subsystem=datasources/xa-data-source=StudentDS/xa-datasource-properties=ServerName:add(value=${env.STUDENT_DB_HOST:postgres-notas})
+    /subsystem=datasources/xa-data-source=StudentDS/xa-datasource-properties=PortNumber:add(value=5432)
+    /subsystem=datasources/xa-data-source=StudentDS/xa-datasource-properties=DatabaseName:add(value=${env.STUDENT_DB_NAME:student_db})
+end-if
+
+/subsystem=transactions:write-attribute(name=node-identifier,value=${env.TXN_NODE_ID:wildfly-datos-node})
+
+stop-embedded-server

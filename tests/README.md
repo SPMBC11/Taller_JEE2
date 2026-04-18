@@ -1,0 +1,36 @@
+# Pruebas automaticas del taller
+
+## E2E de arquitectura distribuida
+
+Script principal:
+
+- `tests/workshop-e2e.ps1`
+
+Valida automaticamente:
+
+1. Flujo feliz extremo a extremo.
+2. Persistencia en ambas bases de datos.
+3. Publicacion/consumo por RabbitMQ.
+4. Envio de correo (modo mock).
+5. Rollback XA cuando falla una base.
+6. Confiabilidad del outbox cuando RabbitMQ esta caido.
+
+## Ejecucion
+
+Desde la raiz del proyecto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1
+```
+
+Si el stack ya esta levantado y no deseas reconstruir:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild
+```
+
+Si quieres forzar recreacion completa de bases y contenedores:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -ResetData
+```
