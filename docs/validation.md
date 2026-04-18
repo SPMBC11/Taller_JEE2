@@ -27,14 +27,14 @@ curl -X POST http://localhost:8080/api/logic/exams/finish \
   -d '{
     "studentId": 1,
     "answers": [
-      {"questionId": 1, "selectedOption": "API de transacciones distribuidas", "correct": true},
-      {"questionId": 2, "selectedOption": "Queue", "correct": true},
-      {"questionId": 3, "selectedOption": "Compensacion", "correct": false}
+      {"questionId": 1, "selectedOption": "API de transacciones distribuidas"},
+      {"questionId": 2, "selectedOption": "Queue"},
+      {"questionId": 3, "selectedOption": "Compensacion"}
     ]
   }'
 ```
 
-Resultado esperado: `HTTP 200` con `examId`, `score`, `status`, `evaluatedAt`.
+Resultado esperado: `HTTP 200` con `examId`, `score`, `status` (`PASSED`/`FAILED`), `evaluatedAt`.
 
 ### Verificacion en BD de examenes
 

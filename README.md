@@ -12,12 +12,13 @@ Implementacion alineada con la arquitectura obligatoria del taller:
 
 ```text
 Usuario
-  -> wildfly-logica (REST / negocio)
-      -> wildfly-datos (JPA + JTA/XA)
-          -> postgres-examenes
-          -> postgres-notas
-      -> queue (RabbitMQ)
-          -> email-service
+  -> wildfly-logica (REST / orquestacion)
+    -> wildfly-datos (validacion + JPA + JTA/XA)
+      -> postgres-examenes
+      -> postgres-notas
+      -> outbox_event
+    -> queue (RabbitMQ, via outbox publisher en wildfly-datos)
+      -> email-service
 ```
 
 ## 2) Transaccion distribuida (JTA + 2PC)
@@ -35,9 +36,9 @@ Nota: para PostgreSQL XA se habilita `max_prepared_transactions=100` en ambos co
 ## 3) Flujo funcional
 
 1. Cliente invoca `POST /api/logic/exams/finish` en `wildfly-logica`.
-2. `wildfly-logica` calcula nota y estado.
+2. `wildfly-logica` valida estructura del request y orquesta el proceso.
 3. `wildfly-logica` llama a `wildfly-datos` (`/api/data/evaluations`).
-4. `wildfly-datos` persiste en las 2 BD dentro de una transaccion distribuida.
+4. `wildfly-datos` valida respuestas contra `question.correct_option`, calcula `correctAnswers`, `score` y `status` (`PASSED`/`FAILED`) y persiste en las 2 BD dentro de una transaccion distribuida.
 5. En la misma transaccion, `wildfly-datos` registra un evento en la tabla `outbox_event` (patron outbox).
 6. Un publisher programado en `wildfly-datos` publica eventos pendientes a `exam.exchange`.
 7. `email-service` consume `exam.notifications` y envia correo (mock/local).
@@ -55,9 +56,9 @@ Ejemplo de request a logica:
 {
   "studentId": 1,
   "answers": [
-    { "questionId": 1, "selectedOption": "API de transacciones distribuidas", "correct": true },
-    { "questionId": 2, "selectedOption": "Queue", "correct": true },
-    { "questionId": 3, "selectedOption": "Compensacion", "correct": false }
+    { "questionId": 1, "selectedOption": "API de transacciones distribuidas" },
+    { "questionId": 2, "selectedOption": "Queue" },
+    { "questionId": 3, "selectedOption": "Compensacion" }
   ]
 }
 ```
