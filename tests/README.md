@@ -34,3 +34,9 @@ Si quieres forzar recreacion completa de bases y contenedores:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -ResetData
 ```
+
+Si quieres ver evidencia detallada en consola (estado de BD1, BD2, outbox, cola y logs de email en cada caso):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -VerboseReport
+```

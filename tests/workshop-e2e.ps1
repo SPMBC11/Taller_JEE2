@@ -1,6 +1,7 @@
 param(
     [switch]$SkipBuild,
-    [switch]$ResetData
+    [switch]$ResetData,
+    [switch]$VerboseReport
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,6 +117,49 @@ function Assert-EmailLogContainsExam {
     Assert-True -Condition ([bool]($logText -match "Resultado de evaluacion #$ExamId")) -Message "No aparece correo para examId=$ExamId en logs de email-service"
 }
 
+function Show-DbSnapshot {
+    param(
+        [string]$Title,
+        [long]$ExamId = 0
+    )
+
+    if (-not $VerboseReport) {
+        return
+    }
+
+    Write-Output ""
+    Write-Output "=== SNAPSHOT: $Title ==="
+
+    Write-Output '-- BD1 exam_attempt (ultimos 5) --'
+    docker exec postgres-examenes psql -U exam_user -d exam_db -c "SELECT id, student_id, score, correct_answers, total_questions FROM exam_attempt ORDER BY id DESC LIMIT 5;"
+
+    Write-Output '-- BD1 evaluation (ultimos 5) --'
+    docker exec postgres-examenes psql -U exam_user -d exam_db -c "SELECT id, exam_attempt_id, status, score, evaluated_at FROM evaluation ORDER BY id DESC LIMIT 5;"
+
+    Write-Output '-- BD1 outbox_event (ultimos 5) --'
+    docker exec postgres-examenes psql -U exam_user -d exam_db -c "SELECT id, aggregate_id, status, attempt_count, next_attempt_at, sent_at FROM outbox_event ORDER BY id DESC LIMIT 5;"
+
+    if ($ExamId -gt 0) {
+        Write-Output "-- BD1 answer para exam_attempt_id=$ExamId --"
+        docker exec postgres-examenes psql -U exam_user -d exam_db -c "SELECT question_id, selected_option, is_correct, points FROM answer WHERE exam_attempt_id = $ExamId ORDER BY id;"
+    }
+
+    Write-Output '-- BD2 grade (ultimos 5) --'
+    docker exec postgres-notas psql -U student_user -d student_db -c "SELECT id, exam_attempt_id, student_id, status, score, created_at FROM grade ORDER BY id DESC LIMIT 5;"
+
+    Write-Output '-- BD2 result_history (ultimos 5) --'
+    docker exec postgres-notas psql -U student_user -d student_db -c "SELECT id, exam_attempt_id, student_id, status, score, evaluated_at FROM result_history ORDER BY id DESC LIMIT 5;"
+
+    Write-Output '-- BD2 processed_messages (ultimos 5) --'
+    docker exec postgres-notas psql -U student_user -d student_db -c "SELECT message_id, exam_id, processed_at FROM processed_messages ORDER BY processed_at DESC LIMIT 5;"
+
+    Write-Output '-- Queue exam.notifications --'
+    docker exec queue rabbitmqctl list_queues name messages_ready messages_unacknowledged
+
+    Write-Output '-- Logs email-service (ultimos 40) --'
+    docker logs email-service --tail 40
+}
+
 Write-Output '=== Workshop E2E Validation ==='
 
 if ($ResetData) {
@@ -141,11 +185,14 @@ $notesStopped = $false
 
 try {
     Write-Output 'Caso 1: flujo feliz + persistencia + cola + correo'
+    Show-DbSnapshot -Title 'Antes de Caso 1'
+
     $beforeExam = [int](Get-SqlScalar -Container 'postgres-examenes' -User 'exam_user' -Database 'exam_db' -Query 'SELECT COUNT(*) FROM exam_attempt;')
     $beforeGrade = [int](Get-SqlScalar -Container 'postgres-notas' -User 'student_user' -Database 'student_db' -Query 'SELECT COUNT(*) FROM grade;')
 
     $happyResponse = Invoke-FinishExam
     $happyExamId = [long]$happyResponse.examId
+    Write-Output "Caso 1 examId=$happyExamId status=$($happyResponse.status) score=$($happyResponse.score)"
 
     $afterExam = [int](Get-SqlScalar -Container 'postgres-examenes' -User 'exam_user' -Database 'exam_db' -Query 'SELECT COUNT(*) FROM exam_attempt;')
     $afterGrade = [int](Get-SqlScalar -Container 'postgres-notas' -User 'student_user' -Database 'student_db' -Query 'SELECT COUNT(*) FROM grade;')
@@ -156,8 +203,11 @@ try {
     Wait-OutboxStatus -ExamId $happyExamId -ExpectedStatus 'SENT'
     Assert-QueueEmpty
     Assert-EmailLogContainsExam -ExamId $happyExamId
+    Show-DbSnapshot -Title 'Despues de Caso 1' -ExamId $happyExamId
 
     Write-Output 'Caso 2: rollback XA cuando falla BD academica'
+    Show-DbSnapshot -Title 'Antes de Caso 2'
+
     $beforeRollback = [int](Get-SqlScalar -Container 'postgres-examenes' -User 'exam_user' -Database 'exam_db' -Query 'SELECT COUNT(*) FROM exam_attempt;')
 
     docker stop postgres-notas | Out-Null
@@ -178,13 +228,17 @@ try {
 
     $afterRollback = [int](Get-SqlScalar -Container 'postgres-examenes' -User 'exam_user' -Database 'exam_db' -Query 'SELECT COUNT(*) FROM exam_attempt;')
     Assert-True -Condition ($afterRollback -eq $beforeRollback) -Message 'Se insertaron datos en BD1 pese a falla de BD2'
+    Show-DbSnapshot -Title 'Despues de Caso 2 (rollback esperado)'
 
     Write-Output 'Caso 3: confiabilidad Outbox con RabbitMQ caido'
+    Show-DbSnapshot -Title 'Antes de Caso 3'
+
     docker stop queue | Out-Null
     $queueStopped = $true
 
     $outboxResponse = Invoke-FinishExam
     $outboxExamId = [long]$outboxResponse.examId
+    Write-Output "Caso 3 examId=$outboxExamId status=$($outboxResponse.status) score=$($outboxResponse.score)"
 
     $outboxStatus = Get-SqlScalar -Container 'postgres-examenes' -User 'exam_user' -Database 'exam_db' -Query "SELECT status FROM outbox_event WHERE aggregate_id = $outboxExamId ORDER BY id DESC LIMIT 1;"
     Assert-True -Condition ($outboxStatus -eq 'PENDING' -or $outboxStatus -eq 'FAILED') -Message 'El evento outbox debio quedar pendiente o fallido con queue caida'
@@ -196,6 +250,7 @@ try {
     Wait-OutboxStatus -ExamId $outboxExamId -ExpectedStatus 'SENT'
     Assert-QueueEmpty
     Assert-EmailLogContainsExam -ExamId $outboxExamId
+    Show-DbSnapshot -Title 'Despues de Caso 3' -ExamId $outboxExamId
 
     Write-Output 'RESULTADO: OK - flujo distribuido y desacoplado validado'
 } finally {
