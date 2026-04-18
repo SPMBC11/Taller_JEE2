@@ -1,12 +1,18 @@
 package com.taller.emailservice.service;
 
+import com.taller.emailservice.entity.ProcessedMessage;
 import com.taller.emailservice.messaging.NotificationMessage;
+import com.taller.emailservice.repository.ProcessedMessageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 @Service
 public class EmailSenderService {
@@ -14,15 +20,41 @@ public class EmailSenderService {
     private static final Logger LOGGER = LoggerFactory.getLogger(EmailSenderService.class);
 
     private final JavaMailSender mailSender;
+    private final ProcessedMessageRepository processedMessageRepository;
     private final String from;
     private final boolean mockMode;
 
     public EmailSenderService(JavaMailSender mailSender,
+                              ProcessedMessageRepository processedMessageRepository,
                               @Value("${app.email.from}") String from,
                               @Value("${app.email.mock-mode:true}") boolean mockMode) {
         this.mailSender = mailSender;
+        this.processedMessageRepository = processedMessageRepository;
         this.from = from;
         this.mockMode = mockMode;
+    }
+
+    @Transactional
+    public boolean sendIfNotProcessed(String messageId, NotificationMessage message) {
+        if (messageId == null || messageId.isBlank()) {
+            throw new IllegalArgumentException("messageId es obligatorio para idempotencia");
+        }
+
+        ProcessedMessage processedMessage = new ProcessedMessage(
+                messageId,
+                message.examId(),
+                LocalDateTime.now()
+        );
+
+        try {
+            processedMessageRepository.saveAndFlush(processedMessage);
+        } catch (DataIntegrityViolationException exception) {
+            LOGGER.info("Mensaje {} ya procesado. Se omite reenvio para examId={}", messageId, message.examId());
+            return false;
+        }
+
+        send(message);
+        return true;
     }
 
     public void send(NotificationMessage message) {

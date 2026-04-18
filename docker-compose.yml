@@ -73,8 +73,6 @@ services:
         condition: service_healthy
       postgres-notas:
         condition: service_healthy
-      queue:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "/opt/jboss/wildfly/bin/jboss-cli.sh --connect --command=':read-attribute(name=server-state)' | grep -q running"]
       interval: 15s
@@ -92,8 +90,6 @@ services:
       DATA_SERVICE_URL: http://wildfly-datos:8080/api/data/evaluations
     depends_on:
       wildfly-datos:
-        condition: service_healthy
-      queue:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "/opt/jboss/wildfly/bin/jboss-cli.sh --connect --command=':read-attribute(name=server-state)' | grep -q running"]
@@ -113,8 +109,13 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
+      APP_DB_URL: jdbc:postgresql://postgres-notas:5432/student_db
+      APP_DB_USER: student_user
+      APP_DB_PASSWORD: student_pass
       MAIL_MOCK_MODE: "true"
       MAIL_FROM: no-reply@taller.local
     depends_on:
+      postgres-notas:
+        condition: service_healthy
       queue:
         condition: service_healthy

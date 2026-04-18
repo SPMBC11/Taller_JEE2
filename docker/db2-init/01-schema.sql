@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS result_history (
     evaluated_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS processed_messages (
+    message_id VARCHAR(120) PRIMARY KEY,
+    exam_id BIGINT NOT NULL,
+    processed_at TIMESTAMP NOT NULL
+);
+
 INSERT INTO student (id, full_name, email)
 VALUES (1, 'Ana Perez', 'ana.perez@example.com')
 ON CONFLICT (id) DO NOTHING;

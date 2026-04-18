@@ -15,18 +15,22 @@ class EmailConsumerTest {
         EmailSenderService senderService = mock(EmailSenderService.class);
         EmailConsumer consumer = new EmailConsumer(senderService);
 
-        NotificationMessage message = new NotificationMessage(
+        NotificationMessage message = message();
+
+        consumer.consume(message, "message-12");
+
+        verify(senderService).sendIfNotProcessed("message-12", message);
+    }
+
+    private NotificationMessage message() {
+        return new NotificationMessage(
                 12L,
                 1L,
                 "Ana Perez",
                 "ana.perez@example.com",
                 BigDecimal.valueOf(88.5),
-                "APROBADO",
+            "PASSED",
                 "2026-04-18T22:00:00"
         );
-
-        consumer.consume(message);
-
-        verify(senderService).send(message);
     }
 }

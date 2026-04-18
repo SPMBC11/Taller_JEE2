@@ -9,6 +9,7 @@ import com.taller.datos.entity.exam.Answer;
 import com.taller.datos.entity.exam.Evaluation;
 import com.taller.datos.entity.exam.ExamAttempt;
 import com.taller.datos.entity.exam.OutboxEvent;
+import com.taller.datos.entity.exam.Question;
 import com.taller.datos.entity.student.Grade;
 import com.taller.datos.entity.student.ResultHistory;
 import com.taller.datos.entity.student.Student;
@@ -23,6 +24,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 
 @Stateless
 public class EvaluationDataService {
@@ -50,41 +52,50 @@ public class EvaluationDataService {
                 : parseTimestampOrNow(request.getStartedAt());
 
         List<AnswerDto> answers = request.getAnswers();
-        int totalQuestions = request.getTotalQuestions() == null ? answers.size() : request.getTotalQuestions();
-        int correctAnswers = request.getCorrectAnswers() == null
-                ? (int) answers.stream().filter(AnswerDto::isCorrect).count()
-                : request.getCorrectAnswers();
+        int totalQuestions = answers.size();
+        int correctAnswers = 0;
 
-        BigDecimal score = request.getScore() == null
-                ? computeScore(totalQuestions, correctAnswers)
-                : request.getScore().setScale(2, RoundingMode.HALF_UP);
-
-        String status = request.getStatus() == null || request.getStatus().isBlank()
-                ? defaultStatus(score)
-                : request.getStatus();
+        BigDecimal pointPerQuestion = totalQuestions == 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(100).divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
 
         ExamAttempt examAttempt = new ExamAttempt();
         examAttempt.setStudentId(request.getStudentId());
         examAttempt.setStartedAt(startedAt);
         examAttempt.setFinishedAt(finishedAt);
         examAttempt.setTotalQuestions(totalQuestions);
-        examAttempt.setCorrectAnswers(correctAnswers);
-        examAttempt.setScore(score);
-
-        BigDecimal pointPerQuestion = totalQuestions == 0
-                ? BigDecimal.ZERO
-                : BigDecimal.valueOf(100).divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
 
         for (AnswerDto answerDto : answers) {
+            if (answerDto.getQuestionId() == null) {
+                throw new IllegalArgumentException("questionId es obligatorio en cada respuesta");
+            }
+            if (answerDto.getSelectedOption() == null || answerDto.getSelectedOption().isBlank()) {
+                throw new IllegalArgumentException("selectedOption es obligatorio en cada respuesta");
+            }
+
+            Question question = examEntityManager.find(Question.class, answerDto.getQuestionId());
+            if (question == null) {
+                throw new IllegalArgumentException("No existe la pregunta " + answerDto.getQuestionId());
+            }
+
+            boolean correct = sameOption(answerDto.getSelectedOption(), question.getCorrectOption());
+            if (correct) {
+                correctAnswers++;
+            }
+
             Answer answer = new Answer();
             answer.setQuestionId(answerDto.getQuestionId());
             answer.setSelectedOption(answerDto.getSelectedOption());
-            answer.setCorrect(answerDto.isCorrect());
-            answer.setPoints(answerDto.getPoints() == null
-                    ? (answerDto.isCorrect() ? pointPerQuestion : BigDecimal.ZERO)
-                    : answerDto.getPoints());
+            answer.setCorrect(correct);
+            answer.setPoints(correct ? pointPerQuestion : BigDecimal.ZERO);
             examAttempt.addAnswer(answer);
         }
+
+        BigDecimal score = computeScore(totalQuestions, correctAnswers);
+        String status = defaultStatus(score);
+
+        examAttempt.setCorrectAnswers(correctAnswers);
+        examAttempt.setScore(score);
 
         Evaluation evaluation = new Evaluation();
         evaluation.setScore(score);
@@ -170,6 +181,16 @@ public class EvaluationDataService {
     }
 
     private String defaultStatus(BigDecimal score) {
-        return score.compareTo(BigDecimal.valueOf(60)) >= 0 ? "APROBADO" : "REPROBADO";
+        return score.compareTo(BigDecimal.valueOf(60)) >= 0 ? "PASSED" : "FAILED";
+    }
+
+    private boolean sameOption(String selectedOption, String correctOption) {
+        return normalize(selectedOption).equals(normalize(correctOption));
+    }
+
+    private String normalize(String value) {
+        return value == null
+                ? ""
+                : value.trim().toLowerCase(Locale.ROOT);
     }
 }

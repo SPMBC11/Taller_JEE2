@@ -68,9 +68,9 @@ function Invoke-FinishExam {
     $bodyObject = [ordered]@{
         studentId = 1
         answers = @(
-            @{ questionId = 1; selectedOption = 'API de transacciones distribuidas'; correct = $true },
-            @{ questionId = 2; selectedOption = 'Queue'; correct = $true },
-            @{ questionId = 3; selectedOption = 'Compensacion'; correct = $false }
+            @{ questionId = 1; selectedOption = 'API de transacciones distribuidas' },
+            @{ questionId = 2; selectedOption = 'Queue' },
+            @{ questionId = 3; selectedOption = 'Compensacion' }
         )
     }
 

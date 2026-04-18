@@ -1,8 +1,11 @@
 package com.taller.logica.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.ArrayList;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FinishExamRequest {
 
     private Long studentId;

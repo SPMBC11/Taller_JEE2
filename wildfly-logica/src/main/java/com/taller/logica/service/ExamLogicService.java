@@ -9,14 +9,10 @@ import com.taller.logica.dto.PersistEvaluationResponse;
 import jakarta.ejb.EJB;
 import jakarta.ejb.Stateless;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 
 @Stateless
 public class ExamLogicService {
-
-    private static final BigDecimal PASSING_SCORE = BigDecimal.valueOf(60);
 
     @EJB
     private DataServiceClient dataServiceClient;
@@ -24,31 +20,17 @@ public class ExamLogicService {
     public FinishExamResponse finishExam(FinishExamRequest request) {
         validate(request);
 
-        int totalQuestions = request.getAnswers().size();
-        int correctAnswers = (int) request.getAnswers().stream().filter(AnswerRequest::isCorrect).count();
-        BigDecimal score = calculateScore(totalQuestions, correctAnswers);
-        String status = score.compareTo(PASSING_SCORE) >= 0 ? "APROBADO" : "REPROBADO";
         String now = OffsetDateTime.now().toString();
 
         PersistEvaluationRequest persistRequest = new PersistEvaluationRequest();
         persistRequest.setStudentId(request.getStudentId());
         persistRequest.setStartedAt(now);
         persistRequest.setFinishedAt(now);
-        persistRequest.setTotalQuestions(totalQuestions);
-        persistRequest.setCorrectAnswers(correctAnswers);
-        persistRequest.setScore(score);
-        persistRequest.setStatus(status);
-
-        BigDecimal pointPerQuestion = totalQuestions == 0
-                ? BigDecimal.ZERO
-                : BigDecimal.valueOf(100).divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
 
         for (AnswerRequest answerRequest : request.getAnswers()) {
             DataAnswerDto answerDto = new DataAnswerDto();
             answerDto.setQuestionId(answerRequest.getQuestionId());
             answerDto.setSelectedOption(answerRequest.getSelectedOption());
-            answerDto.setCorrect(answerRequest.isCorrect());
-            answerDto.setPoints(answerRequest.isCorrect() ? pointPerQuestion : BigDecimal.ZERO);
             persistRequest.getAnswers().add(answerDto);
         }
 
@@ -72,14 +54,13 @@ public class ExamLogicService {
         if (request.getAnswers() == null || request.getAnswers().isEmpty()) {
             throw new IllegalArgumentException("Debe existir al menos una respuesta");
         }
-    }
-
-    private BigDecimal calculateScore(int totalQuestions, int correctAnswers) {
-        if (totalQuestions == 0) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        for (AnswerRequest answer : request.getAnswers()) {
+            if (answer.getQuestionId() == null) {
+                throw new IllegalArgumentException("questionId es obligatorio en cada respuesta");
+            }
+            if (answer.getSelectedOption() == null || answer.getSelectedOption().isBlank()) {
+                throw new IllegalArgumentException("selectedOption es obligatorio en cada respuesta");
+            }
         }
-        return BigDecimal.valueOf(correctAnswers)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
     }
 }
