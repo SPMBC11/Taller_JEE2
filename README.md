@@ -63,17 +63,25 @@ Ejemplo de request a logica:
 }
 ```
 
-## 5) Ejecucion
+## 5) Guia de ejecucion para profesor
 
-```bash
-docker compose up -d --build
-```
+Esta seccion esta pensada para compilar y ejecutar el proyecto en evaluacion.
 
-Si vienes de una version previa con esquema distinto, recrea volumenes de BD:
+### 5.1) Prerrequisitos
+
+1. Docker Desktop (con Docker Compose v2 habilitado).
+2. Git.
+3. PowerShell (para correr el script E2E en Windows).
+4. Opcional para compilacion local: Java 21 + Maven 3.9.x.
+
+### 5.2) Opcion recomendada (Docker, build completo)
+
+Desde la raiz del proyecto:
 
 ```bash
 docker compose down -v
 docker compose up -d --build
+docker compose ps --all
 ```
 
 Servicios esperados:
@@ -85,9 +93,73 @@ Servicios esperados:
 - `queue` (5672, 15672)
 - `email-service`
 
+### 5.3) Prueba automatica recomendada (E2E)
+
+Primera ejecucion o si se quiere limpiar datos:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -ResetData
+```
+
+Re-ejecucion rapida sin rebuild:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild
+```
+
+Resultado esperado al final:
+
+```text
+RESULTADO: OK - flujo distribuido y desacoplado validado
+```
+
+### 5.4) Prueba manual minima
+
+Request al endpoint publico de logica:
+
+```bash
+curl -X POST http://localhost:8080/api/logic/exams/finish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "studentId": 1,
+    "answers": [
+      {"questionId": 1, "selectedOption": "API de transacciones distribuidas"},
+      {"questionId": 2, "selectedOption": "Queue"},
+      {"questionId": 3, "selectedOption": "Compensacion"}
+    ]
+  }'
+```
+
+Checks rapidos:
+
+```bash
+docker exec postgres-examenes psql -U exam_user -d exam_db -c "SELECT id, status FROM outbox_event ORDER BY id DESC LIMIT 5;"
+docker exec postgres-notas psql -U student_user -d student_db -c "SELECT message_id, exam_id FROM processed_messages ORDER BY processed_at DESC LIMIT 5;"
+docker exec queue rabbitmqctl list_queues name messages_ready messages_unacknowledged
+docker logs email-service --tail 80
+```
+
+### 5.5) Compilacion local por modulo (sin Docker)
+
+Si el profesor desea compilar directamente con Maven:
+
+```bash
+mvn -f wildfly-logica/pom.xml clean package -DskipTests
+mvn -f wildfly-datos/pom.xml clean package -DskipTests
+mvn -f email-service/pom.xml clean test
+```
+
+Nota: el modulo `backend` es legacy y no forma parte del backend final evaluable.
+
+### 5.6) Apagar entorno
+
+```bash
+docker compose down
+```
+
 ## 6) Validacion
 
-La validacion funcional detallada (caso feliz y verificaciones en BD/cola/email) esta en `docs/validation.md`.
+La validacion funcional detallada (caso feliz, rollback XA, outbox y correo) esta en `docs/validation.md`.
 
 ## 7) Backend final y modulo legacy
 
