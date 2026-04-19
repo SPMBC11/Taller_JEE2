@@ -107,6 +107,14 @@ Re-ejecucion rapida sin rebuild:
 powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild
 ```
 
+Modo evidencia para evaluacion (genera archivos por caso con estado de BD1, BD2, outbox, cola y logs):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -ExportEvidence
+```
+
+Carpeta de salida por defecto: `tests/evidence/<timestamp>`.
+
 Resultado esperado al final:
 
 ```text

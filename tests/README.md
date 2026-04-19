@@ -40,3 +40,21 @@ Si quieres ver evidencia detallada en consola (estado de BD1, BD2, outbox, cola 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -VerboseReport
 ```
+
+Si quieres exportar evidencia a archivos (una carpeta por ejecucion, con snapshots por caso):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -ExportEvidence
+```
+
+Si quieres consola detallada y archivos al mismo tiempo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -VerboseReport -ExportEvidence
+```
+
+Por defecto la evidencia se guarda en `tests/evidence/<timestamp>`. Si quieres otra ruta:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\workshop-e2e.ps1 -SkipBuild -ExportEvidence -EvidenceDir .\tests\evidence-profesor
+```
